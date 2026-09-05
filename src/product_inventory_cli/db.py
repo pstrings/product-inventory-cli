@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 from psycopg_pool import ConnectionPool
 
-from src.product_inventory_cli.exceptions import (
+from product_inventory_cli.exceptions import (
     InsufficientStockError,
     ProductNotFoundError,
 )
@@ -31,7 +31,7 @@ def add_product(name, price, stock):
 def get_product(product_id):
     with pool.connection() as con, con.cursor() as cur:
         cur.execute(
-            "SELECT * FROM products WHERE id=%s", (product_id))
+            "SELECT * FROM products WHERE id=%s", (product_id,))
         row = cur.fetchone()
 
         if row is None:
@@ -69,7 +69,7 @@ def update_product(product_id, price, stock):
 def delete_product(product_id):
     with pool.connection() as con, con.cursor() as cur:
         cur.execute(
-            "DELETE FROM products WHERE id=%s RETURNING *", (product_id))
+            "DELETE FROM products WHERE id=%s RETURNING *", (product_id,))
 
         row = cur.fetchone()
 
@@ -87,7 +87,7 @@ def buy_product(product_id, quantity):
                     (quantity, product_id, quantity))
         update_row = cur.fetchone()
 
-        cur.execute("SELECT * FROM products WHERE id = %s", (product_id))
+        cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
         select_row = cur.fetchone()
 
         if update_row is None and select_row is not None:
