@@ -1,10 +1,15 @@
 import os
 
 from dotenv import load_dotenv
+from psycopg.errors import ForeignKeyViolation
 from psycopg_pool import ConnectionPool
 
 from product_inventory_cli.exceptions import (
     InsufficientStockError,
+    InvalidQuantityError,
+    NegativePriceError,
+    NegativeStockError,
+    ProductHasOrdersError,
     ProductNotFoundError,
 )
 
@@ -17,9 +22,9 @@ pool = ConnectionPool(db_url)
 
 def add_product(name, price, stock):
     if price < 0:
-        raise ValueError("Price cannot be negative")
+        raise NegativePriceError("Price cannot be negative")
     if stock < 0:
-        raise ValueError("Stock cannot be negative")
+        raise NegativeStockError("Stock cannot be negative")
 
     with pool.connection() as con, con.cursor() as cur:
         cur.execute(
@@ -50,9 +55,9 @@ def list_products():
 
 def update_product(product_id, price, stock):
     if price < 0:
-        raise ValueError("Price cannot be negative")
+        raise NegativePriceError("Price cannot be negative")
     if stock < 0:
-        raise ValueError("Stock cannot be negative")
+        raise NegativeStockError("Stock cannot be negative")
 
     with pool.connection() as con, con.cursor() as cur:
         cur.execute(
@@ -67,21 +72,25 @@ def update_product(product_id, price, stock):
 
 
 def delete_product(product_id):
-    with pool.connection() as con, con.cursor() as cur:
-        cur.execute(
-            "DELETE FROM products WHERE id=%s RETURNING *", (product_id,))
+    try:
+        with pool.connection() as con, con.cursor() as cur:
+            cur.execute(
+                "DELETE FROM products WHERE id=%s RETURNING *", (product_id,))
 
-        row = cur.fetchone()
+            row = cur.fetchone()
 
-        if row is None:
-            raise ProductNotFoundError("Product not found.")
+            if row is None:
+                raise ProductNotFoundError("Product not found.")
 
-        return row
+            return row
+    except ForeignKeyViolation as e:
+        raise ProductHasOrdersError(
+            "Cannot delete product as it has existing orders") from e
 
 
 def buy_product(product_id, quantity):
     if quantity <= 0:
-        raise ValueError("Quantity must be 1 or more.")
+        raise InvalidQuantityError("Quantity must be 1 or more")
     with pool.connection() as con, con.cursor() as cur:
         cur.execute("UPDATE products SET stock = stock - %s WHERE id = %s AND stock >= %s RETURNING *",
                     (quantity, product_id, quantity))
